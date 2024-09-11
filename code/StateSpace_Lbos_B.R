@@ -7,6 +7,7 @@
 library(mvgam)
 library(tidyverse)
 library(slider)
+library(ggpubr)
 
 # Get data
 flow <- read_csv("data/Lambrechtbos_B_Belfort_stream_flow_volume_March_1961_October_2008.csv")
@@ -46,13 +47,16 @@ dat %>% pivot_longer(cols = c("flow", "rainfall")) %>%
   geom_line() +
   facet_wrap(.~name, nrow = 2, scales = "free")
 
-# Explore lagged or cumulative effects of rainfall
+# Explore lagged or cumulative effects of rainfall (also see RcppRoll::roll_mean or roll_sum that allow weighted cumulative windows)
 dat %>% mutate(lag_1 = lag(rainfall, 1),
                lag_2 = lag(rainfall, 2),
                lag_3 = lag(rainfall, 3)) %>%
   pivot_longer(cols = starts_with("lag")) %>%
-  ggplot(aes(y = flow, x = value)) +
-  geom_point() +
+  ggscatter(y = "flow", x = "value", add = "reg.line") +
+  stat_cor(label.y = 85000) +
+  stat_regline_equation(label.y = 80000) +
+  # ggplot(aes(y = flow, x = value)) +
+  # geom_point() +
   facet_wrap(.~name, scales = "free")
 
 dat %>% mutate(cum_rain2 = slide_vec(rainfall, mean, .before = 1),
@@ -61,11 +65,18 @@ dat %>% mutate(cum_rain2 = slide_vec(rainfall, mean, .before = 1),
                cum_rain5 = slide_vec(rainfall, mean, .before = 4),
                cum_rain6 = slide_vec(rainfall, mean, .before = 5)) %>%
   pivot_longer(cols = starts_with("cum")) %>%
-  ggplot(aes(y = flow, x = value)) +
-  geom_point() +
+  ggscatter(y = "flow", x = "value", add = "reg.line") +
+  stat_cor(label.y = 85000) +
+  stat_regline_equation(label.y = 78000) +
+  # ggplot(aes(y = flow, x = value)) +
+  # geom_point() +
+  # geom_smooth(method = "lm") +
   facet_wrap(.~name, scales = "free")
 
-#plot(dat$flow ~ slide_vec(dat$rainfall, sum, .before = 6))
+# Add lagged or cumulative rainfall to data
+dat <- dat %>% 
+  mutate(lag_1 = lag(rainfall, 1),
+         cum_rain5 = slide_vec(rainfall, mean, .before = 4))
 
 # Split datasets
 data_train <- slice(dat, 1:129) # before pines
@@ -87,11 +98,9 @@ baseline_model = mvgam(flow ~ rainfall,
                        thin = 9)
 
 pairs(baseline_model)
-
 mcmc_plot(baseline_model, type = "trace", variable = c("rainfall", "ar1[1]", "sigma[1]"))
-
 plot(baseline_model, type = "forecast")
-
+summary(baseline_model)
 
 # lognormal
 lognormal_model = mvgam(flow ~ rainfall,
@@ -106,19 +115,12 @@ lognormal_model = mvgam(flow ~ rainfall,
                        thin = 9)
 
 pairs(lognormal_model)
-
 mcmc_plot(lognormal_model, type = "trace", variable = c("rainfall", "ar1[1]", "sigma[1]"))
-
 plot(lognormal_model, type = "forecast")
-
 plot(lognormal_model, type = 'residuals')
-
 pp_check(lognormal_model, type = 'dens_overlay')
-
 pp_check(lognormal_model, type = 'pit_ecdf')
-
 summary(lognormal_model)
-
 mcmc_plot(lognormal_model, variable = c('rainfall'), regex = TRUE, type = 'areas')
 
 # lognormal dynamic model (i.e. time-varying predictors, i.e. a state space model)
@@ -134,18 +136,53 @@ ldyn_model = mvgam(flow ~ dynamic(rainfall, k=40),
                         adapt_delta = 0.9,
                         thin = 2)
 
-pairs(ldyn_model)
-
 mcmc_plot(ldyn_model, type = "trace", variable = c("rainfall", "ar1[1]", "sigma[1]"))
-
 plot(ldyn_model, type = "forecast")
-
 plot(ldyn_model, type = 'residuals')
-
 pp_check(ldyn_model, type = 'dens_overlay')
-
 pp_check(ldyn_model, type = 'pit_ecdf')
-
 summary(ldyn_model)
-
 mcmc_plot(ldyn_model, variable = c('rainfall'), regex = TRUE, type = 'areas')
+
+
+# lognormal dynamic model with cumulative rainfall over the previous 5 months (i.e. time-varying predictors, i.e. a state space model)
+
+ldyn_model = mvgam(flow ~ dynamic(cum_rain5, k=40),
+                   trend_model = "AR1",
+                   family = lognormal(),
+                   data = data_train,
+                   newdata = data_test,
+                   noncentred = T,
+                   burnin = 1000,
+                   samples = 1000,
+                   adapt_delta = 0.9,
+                   thin = 2)
+
+mcmc_plot(ldyn_model, type = "trace", variable = c("cum_rain5", "ar1[1]", "sigma[1]"))
+plot(ldyn_model, type = "forecast")
+plot(ldyn_model, type = 'residuals')
+pp_check(ldyn_model, type = 'dens_overlay')
+pp_check(ldyn_model, type = 'pit_ecdf')
+summary(ldyn_model)
+mcmc_plot(ldyn_model, variable = c('cum_rain5'), regex = TRUE, type = 'areas')
+
+
+# lognormal dynamic model with cumulative rainfall over the previous 5 months (i.e. time-varying predictors, i.e. a state space model)
+#   - All data
+ldyn_model = mvgam(flow ~ dynamic(cum_rain5, k=40),
+                   trend_model = "AR1",
+                   family = lognormal(),
+                   data = dat,
+                   noncentred = T,
+                   burnin = 1000,
+                   samples = 1000,
+                   adapt_delta = 0.9,
+                   thin = 2)
+
+mcmc_plot(ldyn_model, type = "trace", variable = c("cum_rain5", "ar1[1]", "sigma[1]"))
+plot(ldyn_model, type = "forecast")
+plot(ldyn_model, type = 'residuals')
+pp_check(ldyn_model, type = 'dens_overlay')
+pp_check(ldyn_model, type = 'pit_ecdf')
+summary(ldyn_model)
+mcmc_plot(ldyn_model, variable = c('cum_rain5'), regex = TRUE, type = 'areas')
