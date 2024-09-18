@@ -186,3 +186,24 @@ pp_check(ldyn_model, type = 'dens_overlay')
 pp_check(ldyn_model, type = 'pit_ecdf')
 summary(ldyn_model)
 mcmc_plot(ldyn_model, variable = c('cum_rain5'), regex = TRUE, type = 'areas')
+
+# lognormal dynamic model with seasonality using cumulative rainfall over the previous 5 months (i.e. time-varying predictors, i.e. a state space model)
+#   - All data
+ldyn_model = mvgam(flow ~ dynamic(cum_rain5, k=40) +
+                     s(season),
+                   trend_model = "AR1",
+                   family = lognormal(),
+                   data = dat,
+                   noncentred = T,
+                   burnin = 1000,
+                   samples = 1000,
+                   adapt_delta = 0.9,
+                   thin = 2)
+
+mcmc_plot(ldyn_model, type = "trace", variable = c("cum_rain5", "ar1[1]", "sigma[1]"))
+plot(ldyn_model, type = "forecast")
+plot(ldyn_model, type = 'residuals')
+pp_check(ldyn_model, type = 'dens_overlay')
+pp_check(ldyn_model, type = 'pit_ecdf')
+summary(ldyn_model)
+mcmc_plot(ldyn_model, variable = c('cum_rain5'), regex = TRUE, type = 'areas')
