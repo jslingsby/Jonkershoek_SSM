@@ -11,8 +11,10 @@ library(ggpubr)
 
 # Get data
 flow <- read_csv("data/Lambrechtbos_B_Belfort_stream_flow_volume_March_1961_October_2008.csv")
+#flow2 <- read_csv("data/Langrivier_Belfort_stream_flow_volume_March_1961_October_2008.csv")
 rain <- read_csv("data/10B_manual_monthly_rainfall_Apr1944_Mar1991.csv")
 
+#flow <- bind_rows(list(tibble(flow,Site = "LbosB"), tibble(flow2,Site = "Langrivier")))
 
 # Aggregate to monthly flows
 mflow <- flow %>% 
